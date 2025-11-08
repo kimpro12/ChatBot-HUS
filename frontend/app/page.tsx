@@ -1,27 +1,123 @@
 "use client";
 
-import { FormEvent, useMemo } from "react";
-import { useChat } from "ai/react";
+import { FormEvent, useMemo, useRef, useState } from "react";
+
+type ChatRole = "assistant" | "user";
+
+type ChatMessage = {
+  id: string;
+  role: ChatRole;
+  content: string;
+};
 
 const CTA_MESSAGE = "Hỏi về điểm chuẩn, tổ hợp xét tuyển, hoặc thông tin tuyển sinh.";
 
 export default function HomePage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, stop } = useChat({
-    api: "/api/chat",
-    initialMessages: [
-      {
-        id: "system-intro",
-        role: "assistant",
-        content: "Xin chào! Tôi là trợ lý tuyển sinh của trường. Bạn cần biết điều gì?",
-      },
-    ],
-  });
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "system-intro",
+      role: "assistant",
+      content: "Xin chào! Tôi là trợ lý tuyển sinh của trường. Bạn cần biết điều gì?",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const lastAnswer = useMemo(() => messages.filter((msg) => msg.role === "assistant").at(-1), [messages]);
+  const lastAnswer = useMemo(
+    () => messages.filter((msg) => msg.role === "assistant").at(-1),
+    [messages],
+  );
 
-  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const stop = () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+  };
+
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    handleSubmit(event);
+    const trimmed = input.trim();
+
+    if (!trimmed || isLoading) {
+      return;
+    }
+
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: trimmed,
+    };
+
+    const nextMessages: ChatMessage[] = [...messages, userMessage];
+    const placeholder: ChatMessage = {
+      id: `assistant-${Date.now()}`,
+      role: "assistant",
+      content: "",
+    };
+
+    setMessages([...nextMessages, placeholder]);
+    setInput("");
+    setIsLoading(true);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ messages: nextMessages }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(await response.text());
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      let assistantText = "";
+      let done = false;
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          assistantText += decoder.decode(value, { stream: !done });
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: assistantText,
+            };
+            return updated;
+          });
+        }
+      }
+    } catch (error) {
+      if ((error as DOMException).name === "AbortError") {
+        setMessages((prev) => prev.slice(0, -1));
+      } else {
+        const fallback =
+          error instanceof Error && error.message
+            ? error.message
+            : "Đã có lỗi khi gọi mô hình.";
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            content: fallback,
+          };
+          return updated;
+        });
+      }
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
   };
 
   return (
@@ -44,7 +140,7 @@ export default function HomePage() {
         <form onSubmit={onSubmit} className="flex flex-col gap-2">
           <textarea
             value={input}
-            onChange={handleInputChange}
+            onChange={(event) => setInput(event.target.value)}
             placeholder="Ví dụ: Điểm chuẩn ngành Khoa học dữ liệu năm 2024?"
             className="w-full min-h-[120px] rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-slate-50"
           />

@@ -31,10 +31,19 @@ export async function POST(request: NextRequest) {
 
   const prompt = buildPrompt(messages, context, question);
 
-  const result = await streamText({
-    model: llm(DEFAULT_MODEL),
-    prompt,
-  });
+  try {
+    const result = await streamText({
+      model: llm(DEFAULT_MODEL),
+      prompt,
+    });
 
-  return result.toAIStreamResponse();
+    return result.toAIStreamResponse();
+  } catch (error) {
+    console.error("Failed to call LLM", error);
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : "Không thể kết nối tới máy chủ mô hình.";
+    return new Response(message, { status: 502 });
+  }
 }
