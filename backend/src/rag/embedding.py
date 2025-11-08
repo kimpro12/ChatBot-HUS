@@ -1,7 +1,7 @@
 """Embedding providers for the chatbot."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, List, Any
 
 try:  # pragma: no cover - import guard for optional dependency
@@ -26,7 +26,7 @@ class EmbeddingModel:
 class BGEEmbeddingModel(EmbeddingModel):
     """Embedding model backed by sentence-transformers BGE-M3."""
 
-    _model = None
+    _model: Any | None = field(init=False, default=None, repr=False)
 
     def _load_model(self):
         if self._model is None:
