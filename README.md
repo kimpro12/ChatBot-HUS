@@ -21,7 +21,7 @@ This repository delivers an end-to-end admissions chatbot that ingests a single 
 ChatBot-HUS/
 ├── backend/    # FastAPI service, ingestion pipeline, and unit tests
 ├── frontend/   # Next.js application that consumes the backend API
-└── Chatbot_TuyenSinh_RAG_FAISS_Tables.docx  # Original requirements document
+└── Chatbot_TuyenSinh_RAG_FAISS_Tables_OpenSourceLLM.docx  # Original requirements document
 ```
 
 ## 3. Backend quickstart
