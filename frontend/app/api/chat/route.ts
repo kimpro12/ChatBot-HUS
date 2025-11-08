@@ -6,7 +6,7 @@ import { retrieveContext } from "@/lib/backend";
 import { buildPrompt } from "@/lib/prompt";
 
 const llm = createOpenAI({
-  baseURL: process.env.LLM_BASE_URL ?? "http://localhost:8000/v1",
+  baseURL: process.env.LLM_BASE_URL ?? "http://localhost:8001/v1",
   apiKey: process.env.LLM_API_KEY ?? "token-abc123",
 });
 
@@ -40,10 +40,16 @@ export async function POST(request: NextRequest) {
     return result.toAIStreamResponse();
   } catch (error) {
     console.error("Failed to call LLM", error);
-    const message =
+    let message =
       error instanceof Error && error.message
         ? error.message
         : "Không thể kết nối tới máy chủ mô hình.";
+
+    if (message.includes("Not Found")) {
+      message =
+        "Không thể gọi mô hình Qwen. Hãy kiểm tra LLM_BASE_URL và đảm bảo dịch vụ mô hình chạy trên cổng khác với backend.";
+    }
+
     return new Response(message, { status: 502 });
   }
 }

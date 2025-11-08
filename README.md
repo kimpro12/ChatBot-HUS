@@ -86,10 +86,10 @@ python -m vllm.entrypoints.openai.api_server \
   --quantization awq --dtype float16 \
   --max-model-len 8192 \
   --api-key token-abc123 \
-  --port 8000
+  --port 8001
 ```
 
-This exposes `http://localhost:8000/v1` with token authentication. Update the API key if you need a different value.
+This exposes `http://localhost:8001/v1` with token authentication. Update the API key if you need a different value. Running the LLM service on a dedicated port prevents clashes with the FastAPI backend listening on `http://localhost:8000`.
 
 ### Option B – Transformers + bitsandbytes (CPU/GPU fallback)
 
@@ -122,7 +122,7 @@ Edit `.env.local` to match your environment:
 
 ```
 BACKEND_URL=http://localhost:8000
-LLM_BASE_URL=http://localhost:8000/v1
+LLM_BASE_URL=http://localhost:8001/v1
 LLM_API_KEY=token-abc123
 LLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ
 ```
