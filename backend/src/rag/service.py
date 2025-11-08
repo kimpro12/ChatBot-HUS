@@ -1,7 +1,7 @@
 """High level chatbot service."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, List
 
@@ -16,14 +16,21 @@ class ChatbotService:
     """Coordinate ingestion and retrieval for the admissions chatbot."""
 
     config: PipelineConfig
+    pipeline: IngestionPipeline = field(init=False)
+    embedding_model: EmbeddingModel = field(init=False)
+    vector_store: FaissVectorStore = field(init=False)
 
     def __post_init__(self) -> None:
         self.pipeline = IngestionPipeline(self.config)
         self.embedding_model: EmbeddingModel = BGEEmbeddingModel(self.config.embedding)
         self.vector_store: FaissVectorStore = self.pipeline.vector_store
 
-    def ingest_pdf(self, pdf_path: str | Path, metadata: DocumentMetadata) -> None:
-        self.pipeline.ingest(pdf_path=Path(pdf_path), metadata=metadata)
+    def ingest_pdf(
+        self, pdf_path: str | Path, metadata: DocumentMetadata | None = None
+    ) -> None:
+        pdf_path = Path(pdf_path)
+        metadata = metadata or DocumentMetadata(source=pdf_path.stem)
+        self.pipeline.ingest(pdf_path=pdf_path, metadata=metadata)
 
     def load(self) -> None:
         self.vector_store.load()

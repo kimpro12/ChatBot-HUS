@@ -1,7 +1,7 @@
 """Ingestion pipeline that turns PDFs into FAISS indices."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
@@ -24,6 +24,10 @@ class IngestionPipeline:
     """End-to-end ingestion pipeline for a single PDF file."""
 
     config: PipelineConfig
+    parsers: List[DocumentParser] = field(init=False)
+    parser: DocumentParser = field(init=False)
+    embedding_model: EmbeddingModel = field(init=False)
+    vector_store: FaissVectorStore = field(init=False)
 
     def __post_init__(self) -> None:
         chunk_builder = ChunkBuilder(self.config.chunking)
@@ -33,7 +37,7 @@ class IngestionPipeline:
             CamelotParser(chunk_builder),
             TabulaParser(chunk_builder),
         ]
-        self.parser = CompositeParser(parsers=self.parsers)
+        self.parser = CompositeParser(chunk_builder=chunk_builder, parsers=self.parsers)
         self.embedding_model: EmbeddingModel = BGEEmbeddingModel(self.config.embedding)
         self.vector_store = FaissVectorStore(self.config.vector_store)
 

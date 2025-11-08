@@ -1,7 +1,7 @@
 """Chunking helpers with table-aware logic."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, List
 
 from .config import Chunk, ChunkingConfig, DocumentMetadata
@@ -58,6 +58,8 @@ class ChunkBuilder:
     """Compose text and table chunkers into a single helper."""
 
     config: ChunkingConfig
+    text_chunker: TextChunker = field(init=False)
+    table_chunker: TableChunker = field(init=False)
 
     def __post_init__(self) -> None:
         self.text_chunker = TextChunker(self.config)
