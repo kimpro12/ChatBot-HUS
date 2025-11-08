@@ -8,4 +8,5 @@ __all__ = [
     "vector_store",
     "pipeline",
     "service",
+    "cli",
 ]
