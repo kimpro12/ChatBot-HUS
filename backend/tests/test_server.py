@@ -17,6 +17,7 @@ class DummyService:
         self.ingest_calls: list[Path] = []
         self.load_calls: int = 0
         self.search_calls: list[tuple[str, int]] = []
+        self.chat_payloads: list[tuple[list[dict], int]] = []
 
     def ingest_pdf(self, pdf_path, metadata=None):
         self.ingest_calls.append(Path(pdf_path))
@@ -30,6 +31,10 @@ class DummyService:
 
     def format_context(self, results):
         return ""
+
+    def chat(self, messages, k=6):
+        self.chat_payloads.append((messages, k))
+        raise LookupError("No relevant context found")
 
 
 def with_dummy_service(testcase):
@@ -66,6 +71,19 @@ class ServerTests(unittest.TestCase):
 
             self.assertEqual(ctx.exception.status_code, 404)
             self.assertEqual(dummy.search_calls, [("Hi?", 2)])
+            self.assertEqual(dummy.load_calls, 1)
+
+        with_dummy_service(run)
+
+    def test_chat_propagates_lookup_error(self):
+        def run(dummy: DummyService):
+            request = server.ChatRequest(messages=[server.ChatMessage(role="user", content="Hi")], k=3)
+
+            with self.assertRaises(HTTPException) as ctx:
+                server.chat(request)
+
+            self.assertEqual(ctx.exception.status_code, 404)
+            self.assertEqual(dummy.chat_payloads[0][1], 3)
             self.assertEqual(dummy.load_calls, 1)
 
         with_dummy_service(run)

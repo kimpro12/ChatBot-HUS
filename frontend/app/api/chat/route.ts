@@ -1,55 +1,22 @@
 import { NextRequest } from "next/server";
-import { streamText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-
-import { retrieveContext } from "@/lib/backend";
-import { buildPrompt } from "@/lib/prompt";
-
-const llm = createOpenAI({
-  baseURL: process.env.LLM_BASE_URL ?? "http://localhost:8001/v1",
-  apiKey: process.env.LLM_API_KEY ?? "token-abc123",
-});
-
-const DEFAULT_MODEL = process.env.LLM_MODEL ?? "Qwen/Qwen2.5-7B-Instruct-AWQ";
+import { chatWithBackend } from "@/lib/backend";
 
 export async function POST(request: NextRequest) {
   const { messages } = await request.json();
-  const question = [...messages].reverse().find((msg: any) => msg.role === "user")?.content ?? "";
 
-  if (!question) {
-    return new Response("Missing user question", { status: 400 });
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return new Response("Missing chat history", { status: 400 });
   }
 
-  let context = "";
   try {
-    const response = await retrieveContext(question);
-    context = response.answer_context;
+    const data = await chatWithBackend(messages);
+    return Response.json(data);
   } catch (error) {
-    console.error(error);
-    context = "Không tìm thấy trong tài liệu.";
-  }
-
-  const prompt = buildPrompt(messages, context, question);
-
-  try {
-    const result = await streamText({
-      model: llm(DEFAULT_MODEL),
-      prompt,
-    });
-
-    return result.toAIStreamResponse();
-  } catch (error) {
-    console.error("Failed to call LLM", error);
-    let message =
+    console.error("Failed to call backend chat", error);
+    const message =
       error instanceof Error && error.message
         ? error.message
-        : "Không thể kết nối tới máy chủ mô hình.";
-
-    if (message.includes("Not Found")) {
-      message =
-        "Không thể gọi mô hình Qwen. Hãy kiểm tra LLM_BASE_URL và đảm bảo dịch vụ mô hình chạy trên cổng khác với backend.";
-    }
-
+        : "Không thể kết nối tới backend.";
     return new Response(message, { status: 502 });
   }
 }

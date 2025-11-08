@@ -42,6 +42,25 @@ class PipelineConfig:
 
 
 @dataclass(slots=True)
+class LLMConfig:
+    """Configuration for the local causal language model."""
+
+    model_name: str = "Qwen/Qwen2.5-7B-Instruct"
+    max_new_tokens: int = 512
+    temperature: float = 0.1
+    use_bitsandbytes: bool = True
+    device_map: Optional[str] = "auto"
+
+
+@dataclass(slots=True)
+class ChatbotConfig:
+    """Top-level configuration for the chatbot service."""
+
+    pipeline: PipelineConfig = field(default_factory=PipelineConfig)
+    llm: LLMConfig = field(default_factory=LLMConfig)
+
+
+@dataclass(slots=True)
 class DocumentMetadata:
     """Metadata stored for each chunk within the vector index."""
 

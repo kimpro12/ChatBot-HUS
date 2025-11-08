@@ -5,25 +5,29 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, List
 
-from .config import DocumentMetadata, PipelineConfig, SearchResult
-from .embedding import BGEEmbeddingModel, EmbeddingModel
+from .config import ChatbotConfig, DocumentMetadata, SearchResult
+from .embedding import EmbeddingModel
 from .pipeline import IngestionPipeline
 from .vector_store import FaissVectorStore
+from .llm import LocalCausalLM, format_chat_prompt
 
 
 @dataclass(slots=True)
 class ChatbotService:
     """Coordinate ingestion and retrieval for the admissions chatbot."""
 
-    config: PipelineConfig
+    config: ChatbotConfig
     pipeline: IngestionPipeline = field(init=False)
     embedding_model: EmbeddingModel = field(init=False)
     vector_store: FaissVectorStore = field(init=False)
+    llm: LocalCausalLM = field(init=False)
 
     def __post_init__(self) -> None:
-        self.pipeline = IngestionPipeline(self.config)
-        self.embedding_model: EmbeddingModel = BGEEmbeddingModel(self.config.embedding)
-        self.vector_store: FaissVectorStore = self.pipeline.vector_store
+        pipeline_config = self.config.pipeline
+        self.pipeline = IngestionPipeline(pipeline_config)
+        self.embedding_model = self.pipeline.embedding_model
+        self.vector_store = self.pipeline.vector_store
+        self.llm = LocalCausalLM(self.config.llm)
 
     def ingest_pdf(
         self, pdf_path: str | Path, metadata: DocumentMetadata | None = None
@@ -50,3 +54,22 @@ class ChatbotService:
                 citation += f" - Bảng #{meta.table_index}"
             sections.append(f"[{citation}]\n{result.chunk.text}\n")
         return "\n".join(sections)
+
+    def chat(self, messages: List[dict], k: int = 6) -> tuple[str, str]:
+        question = ""
+        for message in reversed(messages):
+            if message.get("role") == "user":
+                question = message.get("content", "")
+                break
+
+        if not question:
+            raise ValueError("No user question provided")
+
+        results = self.search(question, k=k)
+        if not results:
+            raise LookupError("No relevant context found")
+
+        context = self.format_context(results)
+        prompt = format_chat_prompt(messages, context, question)
+        answer = self.llm.generate(prompt)
+        return answer, context

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 
-from rag.config import PipelineConfig
+from rag.config import ChatbotConfig
 from rag.service import ChatbotService
 
 
@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    service = ChatbotService(PipelineConfig())
+    service = ChatbotService(ChatbotConfig())
     service.load()
     results = service.search(args.question, k=args.k)
     if not results:

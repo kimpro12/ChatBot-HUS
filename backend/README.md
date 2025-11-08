@@ -1,6 +1,6 @@
 # Backend – Admissions Chatbot
 
-The backend packages the PDF ingestion pipeline, FAISS vector store, and FastAPI server for the admissions chatbot. Everything is implemented with small, composable classes so that you can swap parsers, embeddings, or storage without rewriting the application.
+The backend packages the PDF ingestion pipeline, FAISS vector store, Hugging Face-powered language model, and FastAPI server for the admissions chatbot. Everything is implemented with small, composable classes so that you can swap parsers, embeddings, or storage without rewriting the application.
 
 ## 1. Installation
 
@@ -26,6 +26,8 @@ All configuration lives in [`rag/config.py`](src/rag/config.py):
 - `ChunkingConfig` – controls text chunk size, overlap, and the maximum number of table rows per slice.
 - `EmbeddingConfig` – selects the sentence-transformers model (`BAAI/bge-m3` by default) and device placement.
 - `VectorStoreConfig` – sets the FAISS index and metadata file locations (defaults to `data/index.faiss` and `data/meta.json`).
+- `LLMConfig` – defines the Hugging Face causal LM (`Qwen/Qwen2.5-7B-Instruct` by default), generation parameters, and whether bitsandbytes quantisation should be attempted.
+- `ChatbotConfig` – bundles the pipeline + LLM settings passed into `ChatbotService`.
 
 Adjust these values before ingestion if you want to save the index elsewhere or experiment with different chunk sizes.
 
@@ -80,7 +82,19 @@ Endpoints:
     "k": 6
   }
   ```
-  Returns the formatted context string that the frontend forwards to the Qwen model. HTTP 404 is returned if no vectors match the query.
+  Returns the formatted context string used by the generator. HTTP 404 is returned if no vectors match the query.
+
+- `POST /chat`
+  ```json
+  {
+    "messages": [
+      { "role": "assistant", "content": "Xin chào!" },
+      { "role": "user", "content": "Điểm chuẩn CNTT năm 2024?" }
+    ],
+    "k": 6
+  }
+  ```
+  Performs retrieval, builds a prompt, and generates a reply with the locally loaded Qwen model. The response payload contains both the answer and the retrieved context for debugging.
 
 The service automatically loads the FAISS files on demand. If they are missing, the request fails with a `500` error indicating that ingestion must be executed first.
 
@@ -107,4 +121,4 @@ Running the tests after installation is the quickest way to confirm that optiona
 | Tables missing from retrieved context | Camelot/Tabula not installed or PDF is scanned | Install Ghostscript + Java, or convert the PDF to text/OCR before ingestion |
 | Slow embeddings on CPU | BGE-M3 is large | Install the model once to cache weights, or switch to a smaller embedding model via `EmbeddingConfig` |
 
-With the backend running and indexed, you can point the Next.js frontend (see the root `README.md`) to `http://localhost:8000` for retrieval and to your Qwen endpoint for generation.
+With the backend running and indexed, you can point the Next.js frontend (see the root `README.md`) to `http://localhost:8000` for both retrieval and generation.

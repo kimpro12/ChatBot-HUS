@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 type ChatRole = "assistant" | "user";
 
@@ -22,17 +22,11 @@ export default function HomePage() {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   const lastAnswer = useMemo(
     () => messages.filter((msg) => msg.role === "assistant").at(-1),
     [messages],
   );
-
-  const stop = () => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-  };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -49,18 +43,9 @@ export default function HomePage() {
     };
 
     const nextMessages: ChatMessage[] = [...messages, userMessage];
-    const placeholder: ChatMessage = {
-      id: `assistant-${Date.now()}`,
-      role: "assistant",
-      content: "",
-    };
-
-    setMessages([...nextMessages, placeholder]);
+    setMessages(nextMessages);
     setInput("");
     setIsLoading(true);
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
 
     try {
       const response = await fetch("/api/chat", {
@@ -69,54 +54,35 @@ export default function HomePage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ messages: nextMessages }),
-        signal: controller.signal,
       });
 
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         throw new Error(await response.text());
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+      const payload = (await response.json()) as { answer: string };
+      const assistantMessage: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: payload.answer,
+      };
 
-      let assistantText = "";
-      let done = false;
-
-      while (!done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (value) {
-          assistantText += decoder.decode(value, { stream: !done });
-          setMessages((prev) => {
-            const updated = [...prev];
-            updated[updated.length - 1] = {
-              ...updated[updated.length - 1],
-              content: assistantText,
-            };
-            return updated;
-          });
-        }
-      }
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      if ((error as DOMException).name === "AbortError") {
-        setMessages((prev) => prev.slice(0, -1));
-      } else {
-        const fallback =
-          error instanceof Error && error.message
-            ? error.message
-            : "Đã có lỗi khi gọi mô hình.";
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            content: fallback,
-          };
-          return updated;
-        });
-      }
+      const fallback =
+        error instanceof Error && error.message
+          ? error.message
+          : "Đã có lỗi khi gọi mô hình.";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+          content: fallback,
+        },
+      ]);
     } finally {
       setIsLoading(false);
-      abortControllerRef.current = null;
     }
   };
 
@@ -145,12 +111,11 @@ export default function HomePage() {
             className="w-full min-h-[120px] rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-slate-50"
           />
           <div className="flex gap-2 justify-end">
-            {isLoading ? (
-              <button type="button" onClick={stop} className="px-4 py-2 rounded-md bg-slate-700 text-slate-100">
-                Dừng
-              </button>
-            ) : null}
-            <button type="submit" className="px-4 py-2 rounded-md bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold">
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="px-4 py-2 rounded-md bg-sky-500 hover:bg-sky-400 disabled:bg-slate-700 disabled:text-slate-300 text-slate-950 font-semibold"
+            >
               Gửi câu hỏi
             </button>
           </div>

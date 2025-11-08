@@ -16,10 +16,11 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "pydantic",
+    "transformers",
+    "accelerate",
+    "bitsandbytes",
+    "torch",
 ]
-
-[project.optional-dependencies]
-deploy = ["openai"]
 
 [project.scripts]
 ingest-pdf = "rag.cli.ingest:main"

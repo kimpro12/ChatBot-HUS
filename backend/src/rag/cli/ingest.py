@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from rag.config import PipelineConfig
+from rag.config import ChatbotConfig
 from rag.service import ChatbotService
 
 
@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    service = ChatbotService(PipelineConfig())
+    service = ChatbotService(ChatbotConfig())
     service.ingest_pdf(args.pdf)
     print("Ingestion completed. Index stored at", service.vector_store.config.index_path)
 

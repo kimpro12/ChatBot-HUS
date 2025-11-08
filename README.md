@@ -1,6 +1,6 @@
 # Chatbot Tuyển Sinh – PDF RAG with Table Awareness
 
-This repository delivers an end-to-end admissions chatbot that ingests a single PDF prospectus and exposes the information through a retrieval-augmented interface. The backend is a FastAPI service that performs Docling-first parsing, table-aware chunking, BGE-M3 embeddings, and FAISS search. The frontend is a Next.js client that streams answers from a locally served Qwen model.
+This repository delivers an end-to-end admissions chatbot that ingests a single PDF prospectus and exposes the information through a retrieval-augmented interface. The backend is a FastAPI service that performs Docling-first parsing, table-aware chunking, BGE-M3 embeddings, FAISS search, and local response generation via Hugging Face Transformers. The frontend is a Next.js client that proxies chat requests to the backend and renders the responses.
 
 ## 1. Requirements
 
@@ -11,9 +11,9 @@ This repository delivers an end-to-end admissions chatbot that ingests a single 
 | npm | 9 | For installing frontend dependencies |
 | Java | 8 | Enables Tabula as a table-extraction fallback |
 | Ghostscript | 9.x | Enables Camelot's lattice mode |
-| GPU (optional) | ≥12 GB VRAM | Recommended for serving Qwen2.5-7B locally |
+| GPU (optional) | ≥12 GB VRAM | Recommended for faster Qwen2.5-7B generation |
 
-> The backend defaults to CPU-safe settings. Installing GPU drivers/accelerate tooling is only necessary when you want to serve the Qwen model with vLLM or transformers in 4-bit quantisation.
+> The backend loads Qwen2.5-7B through `transformers` with an automatic CPU/GPU fallback. Installing NVIDIA drivers and enabling bitsandbytes quantisation dramatically improves latency but is not strictly required.
 
 ## 2. Project layout
 
@@ -68,45 +68,39 @@ The suite covers the ingestion pipeline, FastAPI routes, and service-level helpe
 uvicorn rag.server:app --reload
 ```
 
-The server exposes two endpoints:
+The server exposes three endpoints:
 
 - `POST /ingest` – accepts `{ "pdf_path": "/absolute/or/relative/path.pdf" }` and triggers the same pipeline as `ingest-pdf`.
-- `POST /query` – accepts `{ "question": "...", "k": 6 }` and returns the formatted retrieval context that the frontend forwards to the LLM.
+- `POST /query` – accepts `{ "question": "...", "k": 6 }` and returns the formatted retrieval context (useful for debugging the retriever).
+- `POST /chat` – accepts `{ "messages": [{ "role": "user" | "assistant", "content": "..." }], "k": 6 }`, performs retrieval, builds a prompt, and generates a response with the local Qwen model.
 
-## 4. Serving the Qwen model locally
+## 4. Local Qwen generation with Transformers
 
-The frontend expects an OpenAI-compatible endpoint that streams responses from `Qwen/Qwen2.5-7B-Instruct`. Two common options are summarised below.
+The FastAPI backend now owns the language-model layer. When the first `/chat` request arrives it lazily loads `Qwen/Qwen2.5-7B-Instruct` via Hugging Face Transformers. If an NVIDIA GPU is detected and `bitsandbytes` is available, the model is loaded in 4-bit NF4 format; otherwise it falls back to full-precision CPU execution.
 
-### Option A – vLLM (recommended for GPUs)
+### 4.1 GPU acceleration (optional)
+
+1. Install the latest CUDA-enabled PyTorch (`pip install torch --index-url https://download.pytorch.org/whl/cu121`).
+2. Ensure the `nvidia-smi` command reports the GPU you plan to use.
+3. Keep the default `use_bitsandbytes=True` setting in `backend/src/rag/config.py` to enable 4-bit quantisation.
+
+### 4.2 CPU-only environments
+
+No additional steps are required. The backend automatically sets `device_map={"": "cpu"}` and generates answers in smaller batches. Expect slower responses for large outputs; consider reducing `LLMConfig.max_new_tokens` if latency is a concern.
+
+### 4.3 Verifying the load
+
+Start the FastAPI server and send a sample chat request:
 
 ```bash
-pip install "vllm>=0.5.0"
-python -m vllm.entrypoints.openai.api_server \
-  --model Qwen/Qwen2.5-7B-Instruct-AWQ \
-  --quantization awq --dtype float16 \
-  --max-model-len 8192 \
-  --api-key token-abc123 \
-  --port 8001
+uvicorn rag.server:app --reload
+
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Điểm chuẩn CNTT?"}]}'
 ```
 
-This exposes `http://localhost:8001/v1` with token authentication. Update the API key if you need a different value. Running the LLM service on a dedicated port prevents clashes with the FastAPI backend listening on `http://localhost:8000`.
-
-### Option B – Transformers + bitsandbytes (CPU/GPU fallback)
-
-```python
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-import torch
-
-bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
-tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
-model = AutoModelForCausalLM.from_pretrained(
-    "Qwen/Qwen2.5-7B-Instruct",
-    device_map="auto",
-    quantization_config=bnb,
-)
-```
-
-Wrap the model in an OpenAI-compatible server such as [Text Generation Inference](https://github.com/huggingface/text-generation-inference) or [litellm](https://github.com/BerriAI/litellm) and point the frontend to its base URL.
+The first call may take ~30–60 seconds while the model weights download and load into memory. Subsequent requests reuse the cached model instance.
 
 ## 5. Frontend setup
 
@@ -118,17 +112,13 @@ npm install
 cp .env.example .env.local
 ```
 
-Edit `.env.local` to match your environment:
+Edit `.env.local` to point the frontend at the FastAPI service:
 
 ```
 BACKEND_URL=http://localhost:8000
-LLM_BASE_URL=http://localhost:8001/v1
-LLM_API_KEY=token-abc123
-LLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ
 ```
 
-- `BACKEND_URL` must reach the FastAPI server started in section 3.4.
-- `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` should line up with the Qwen endpoint you launched in section 4.
+The frontend now delegates both retrieval and generation to the backend, so no additional LLM variables are required.
 
 ### 5.2 Launch the development server
 
