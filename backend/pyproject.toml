@@ -1,0 +1,31 @@
+[project]
+name = "admissions-chatbot-backend"
+version = "0.1.0"
+description = "RAG pipeline backend for the admissions chatbot"
+requires-python = ">=3.10"
+authors = [{name = "Chatbot Team"}]
+dependencies = [
+    "docling",
+    "pymupdf",
+    "camelot-py[base]",
+    "tabula-py",
+    "pandas",
+    "pdfplumber",
+    "faiss-cpu",
+    "sentence-transformers",
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+]
+
+[project.optional-dependencies]
+deploy = ["openai"]
+
+[project.scripts]
+ingest-pdf = "rag.cli.ingest:main"
+query-chatbot = "rag.cli.query:main"
+run-server = "rag.server:app"
+
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
