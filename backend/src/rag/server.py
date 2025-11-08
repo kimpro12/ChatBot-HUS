@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from rag.config import DocumentMetadata, PipelineConfig
+from rag.config import PipelineConfig
 from rag.service import ChatbotService
 
 app = FastAPI(title="Admissions Chatbot API", version="1.0.0")
@@ -15,9 +15,6 @@ service = ChatbotService(PipelineConfig())
 
 class IngestRequest(BaseModel):
     pdf_path: str
-    source: str = "Quy chế tuyển sinh"
-    year: str | None = None
-    faculty: str | None = None
 
 
 class QueryRequest(BaseModel):
@@ -34,12 +31,7 @@ def ingest(request: IngestRequest) -> dict:
     pdf_path = Path(request.pdf_path)
     if not pdf_path.exists():
         raise HTTPException(status_code=404, detail="PDF file not found")
-    metadata = DocumentMetadata(
-        source=request.source,
-        year=request.year,
-        faculty=request.faculty,
-    )
-    service.ingest_pdf(pdf_path, metadata)
+    service.ingest_pdf(pdf_path)
     return {"status": "ok"}
 
 

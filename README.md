@@ -21,7 +21,7 @@ This project implements a complete admissions chatbot pipeline following the pro
    ```
 2. Ingest a PDF admissions document:
    ```bash
-   ingest-pdf data/quy_che_2026.pdf --source "Quy chế tuyển sinh" --year 2026
+   ingest-pdf data/quy_che_2026.pdf
    ```
 3. Run the FastAPI server:
    ```bash
@@ -37,15 +37,17 @@ This project implements a complete admissions chatbot pipeline following the pro
    ```
 2. Copy `.env.example` to `.env.local` (create the file) and set:
    ```bash
-   OPENAI_API_KEY=your_api_key
    BACKEND_URL=http://localhost:8000
+   LLM_BASE_URL=http://localhost:8000/v1
+   LLM_API_KEY=token-abc123
+   LLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ
    ```
 3. Start the development server:
    ```bash
    npm run dev
    ```
 
-The chatbot will stream answers using `gpt-4o-mini` via the Vercel AI SDK while retrieving context from the FAISS index built by the backend.
+The chatbot streams answers from the open-source `Qwen2.5-7B-Instruct` model served through a local Hugging Face/vLLM endpoint while retrieving context from the FAISS index built by the backend.
 
 ## Key Design Decisions
 

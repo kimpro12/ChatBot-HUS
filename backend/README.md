@@ -26,7 +26,7 @@ pip install -e .
 ### Ingest a PDF
 
 ```bash
-ingest-pdf data/quy_che_2026.pdf --source "Quy chế tuyển sinh" --year 2026
+ingest-pdf data/quy_che_2026.pdf
 ```
 
 This command stores `index.faiss` and `meta.json` under `backend/data/` (configurable in `rag/config.py`).
